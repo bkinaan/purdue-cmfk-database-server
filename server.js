@@ -9,6 +9,9 @@ const multer = require("multer");
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+const version = process.env.VERSION || "v1";
+const api = `/api/${version}`;
+
 app.use(cors());
 
 // sync the Sequelize models with the database
@@ -24,11 +27,11 @@ sequelize
 // middleware to parse JSON requests
 app.use(express.json());
 
-// middlewear to upload file
+// middleware to upload files
 const upload = multer({ dest: "uploads/" }); // files will be saved in 'uploads'
 
 // routes
-app.post("/api/v1/mentors/upload", upload.single("file"), async (req, res) => {
+app.post(`${api}/mentors/upload`, upload.single("file"), async (req, res) => {
   try {
     const results = [];
     fs.createReadStream(req.file.path)
@@ -55,7 +58,7 @@ app.post("/api/v1/mentors/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-app.get("/api/v1/mentors", async (req, res) => {
+app.get(`${api}/mentors`, async (req, res) => {
   try {
     const mentors = await Mentor.findAll();
     res.json(mentors);
@@ -65,7 +68,7 @@ app.get("/api/v1/mentors", async (req, res) => {
   }
 });
 
-app.get("/api/v1/buddies", async (req, res) => {
+app.get(`${api}/buddies`, async (req, res) => {
   try {
     const buddies = await Buddy.findAll();
     res.json(buddies);
@@ -75,7 +78,7 @@ app.get("/api/v1/buddies", async (req, res) => {
   }
 });
 
-app.post("/api/v1/mentors", async (req, res) => {
+app.post(`${api}/mentors`, async (req, res) => {
   try {
     const {
       FirstName,
@@ -106,7 +109,7 @@ app.post("/api/v1/mentors", async (req, res) => {
   }
 });
 
-app.post("/api/v1/buddies", async (req, res) => {
+app.post(`${api}/buddies`, async (req, res) => {
   try {
     const {
       id,
@@ -183,7 +186,7 @@ app.post("/api/v1/buddies", async (req, res) => {
   }
 });
 
-app.delete("/api/v1/mentors/:id", async (req, res) => {
+app.delete(`${api}/mentors/:id`, async (req, res) => {
   try {
     const { id } = req.params; // extracting id from the URL parameters
     const mentor = await Mentor.findByPk(id); // finding the mentor by primary key
