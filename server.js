@@ -83,7 +83,7 @@ app.post(`${api}/signup`, async (req, res) => {
   res.send(token);
 });
 
-app.post(`${api}/signin`, async (req, res) => {
+app.post(`${api}/login`, async (req, res) => {
   const { username, password } = req.body;
 
   const mentor = await Mentor.findOne({ where: { username } });

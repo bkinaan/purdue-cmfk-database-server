@@ -16,7 +16,7 @@ Send an unedited CSV file of any list of mentors from the nationals College Ment
 
 ### Security
 
-The server implements JSON Web Tokens (JWT) which are authorized using a username and password. Passwords are hashed using an encryption and never transferred to the client. Only the sign up and sign in links are accessible without a JWT and all other pages require authentication.
+The server implements JSON Web Tokens (JWT) which are authorized using a username and password. Passwords are hashed using an encryption and never transferred to the client. Only the sign up and login links are accessible without a JWT and all other pages require authentication.
 
 For the first time a mentor uses the database, they must activate their account by signing up. This requires their email address as well as the username and password they wish to use for their account. The email address must match the one already linked to their account from the mentor upload. The body of the POST request must must contain the following JSON object format:
 
@@ -28,7 +28,7 @@ For the first time a mentor uses the database, they must activate their account 
 }
 ```
 
-To verify an account, the body of the POST request must contain a JSON object with both the username and password:
+To log in to an account, the body of the POST request must contain a JSON object with both the username and password:
 
 ```JSON
 {
@@ -37,7 +37,7 @@ To verify an account, the body of the POST request must contain a JSON object wi
 }
 ```
 
-After successfully signing up or signing in, the server will respond with a JWT. This JWT must be passsed in every subsequent request to the server to access the database.
+After successfully signing up or logging in, the server will respond with a JWT. This JWT must be passsed in every subsequent request to the server to access the database. The user must request the JWT again after it expires.
 
 ## What's Coming...
 
