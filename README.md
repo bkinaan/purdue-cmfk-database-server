@@ -1,8 +1,8 @@
 # Purdue College Mentors for Kids Database Server
 
-Custom REST API built using Express.js and SQLite.
+Custom REST API built using Express.js and SQLite. Security implemented using JWT.
 
-Built for the [database client](https://github.com/bkinaan/purdue-cmfk-database-client).
+Access using the [database client](https://github.com/bkinaan/purdue-cmfk-database-client).
 
 ## Current Features
 
@@ -42,7 +42,7 @@ After successfully signing up or signing in, the server will respond with a JWT.
 ## What's Coming...
 
 - Automatically store little buddies in the database from a CSV file
-- Automatically pair mentors and little buddies on the database from CSV parsing.
+- Automatically pair mentors and little buddies on the database from CSV parsing
 - Allow CSV reuploads of mentors that already exist for easy automatic updates
 - Gives more automated control to exec/staff members
 - Much more...
