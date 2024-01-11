@@ -83,6 +83,9 @@ class Mentor extends Model {
   async validPassword(password) {
     try {
       // compares passed in password with hashed password stored in mentor
+      // hashes text password and compares to already hashed stored password
+      // if they match, returns true
+      // never revals real password
       const result = await bcrypt.compare(password, this.password);
 
       return result;

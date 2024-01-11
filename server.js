@@ -34,7 +34,7 @@ sequelize
 // middleware to parse JSON requests
 app.use(express.json());
 
-// initialize paasport
+// initialize passport
 app.use(passport.initialize());
 
 // middleware to upload files
@@ -77,8 +77,10 @@ app.post(`${api}/signup`, async (req, res) => {
     username: mentor.username,
   };
 
-  // sign token that expires in 1 hour
-  const token = jwt.sign(payload, secretKey, { expiresIn: "24h" });
+  // sign token that expires in 24 hours
+  const token = jwt.sign(payload, secretKey, {
+    expiresIn: process.env.parseInt(EXPIRES_IN),
+  });
 
   res.send(token);
 });
