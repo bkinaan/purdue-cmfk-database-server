@@ -79,7 +79,7 @@ app.post(`${api}/signup`, async (req, res) => {
 
   // sign token that expires in 24 hours
   const token = jwt.sign(payload, secretKey, {
-    expiresIn: process.env.parseInt(EXPIRES_IN),
+    expiresIn: parseInt(process.env.EXPIRES_IN),
   });
 
   res.send(token);
@@ -104,7 +104,9 @@ app.post(`${api}/login`, async (req, res) => {
     username: mentor.username,
   };
 
-  const token = jwt.sign(payload, secretKey, { expiresIn: "24h" });
+  const token = jwt.sign(payload, secretKey, {
+    expiresIn: parseInt(process.env.EXPIRES_IN),
+  });
 
   res.send(token);
 });
