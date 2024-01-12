@@ -53,6 +53,11 @@ class Mentor extends Model {
       allowNull: true,
       unique: false,
     },
+    Paired: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: false,
+    },
   };
 
   // static hooks = {

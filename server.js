@@ -121,7 +121,7 @@ app.get(
 
 app.post(
   `${api}/mentors/upload`,
-  passport.authenticate("jwt", { session: false }),
+  // passport.authenticate("jwt", { session: false }),
   upload.single("file"),
   async (req, res) => {
     try {
@@ -140,6 +140,7 @@ app.post(
               ActivityDays: row.ActivityDays,
               PrimaryStaffRole: row.PrimaryStaffRole,
               SecondaryStaffRole: row.SecondaryStaffRole,
+              Paired: row.Paired,
             });
           }
           res.status(201).json({ message: "Mentors created successfully" });
@@ -263,7 +264,7 @@ app.post(`${api}/buddies`, async (req, res) => {
       ApprovedForPickupLastName,
       ApprovedForPickupRelationship,
       ApprovedForPickupPrimaryPhone,
-      PairedWith,
+      Paired,
       FavoriteSubject,
       HobbiesAndInterests,
     } = req.body;
@@ -297,7 +298,7 @@ app.post(`${api}/buddies`, async (req, res) => {
       ApprovedForPickupLastName,
       ApprovedForPickupRelationship,
       ApprovedForPickupPrimaryPhone,
-      PairedWith,
+      Paired,
       FavoriteSubject,
       HobbiesAndInterests,
     });
