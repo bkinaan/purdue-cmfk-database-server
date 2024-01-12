@@ -1,5 +1,5 @@
 const express = require("express");
-const { sequelize } = require("./db/connection");
+const { sequelize, Op } = require("./db/connection");
 const { Mentor, Buddy } = require("./models/models");
 const cors = require("cors");
 const fs = require("fs");
@@ -79,7 +79,7 @@ app.post(`${api}/signup`, async (req, res) => {
 
   // sign token that expires in 24 hours
   const token = jwt.sign(payload, secretKey, {
-    expiresIn: parseInt(process.env.EXPIRES_IN),
+    expiresIn: process.env.EXPIRES_IN,
   });
 
   res.send(token);
@@ -105,7 +105,7 @@ app.post(`${api}/login`, async (req, res) => {
   };
 
   const token = jwt.sign(payload, secretKey, {
-    expiresIn: parseInt(process.env.EXPIRES_IN),
+    expiresIn: process.env.EXPIRES_IN,
   });
 
   res.send(token);
@@ -156,8 +156,29 @@ app.get(
   passport.authenticate("jwt", { session: false }),
   async (req, res) => {
     try {
-      const mentors = await Mentor.findAll();
-      res.json(mentors);
+      // authenticate mentor's role
+      const currentUserID = req.user.id;
+      console.log(currentUserID);
+
+      const currentUser = await Mentor.findOne({
+        where: { id: currentUserID },
+      });
+
+      if (
+        currentUser.PrimaryStaffRole === "VP of Programming" ||
+        currentUser.SecondaryStaffRole === "VP of Programming"
+      ) {
+        const mentors = await Mentor.findAll({
+          where: { ActivityDays: { [Op.like]: "%Tuesday%" } },
+        });
+
+        res.json(mentors);
+      } else {
+        res.json(currentUser);
+      }
+
+      // const mentors = await Mentor.findAll();
+      // res.json(mentors);
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Internal Server Error" });
@@ -175,36 +196,40 @@ app.get(`${api}/buddies`, async (req, res) => {
   }
 });
 
-app.post(`${api}/mentors`, async (req, res) => {
-  try {
-    const {
-      FirstName,
-      LastName,
-      EmailAddress,
-      NonSchoolEmailAddress,
-      Phone,
-      ActivityDays,
-      PrimaryStaffRole,
-      SecondaryStaffRole,
-      Paired,
-    } = req.body;
-    const newMentor = await Mentor.create({
-      FirstName,
-      LastName,
-      EmailAddress,
-      NonSchoolEmailAddress,
-      Phone,
-      ActivityDays,
-      PrimaryStaffRole,
-      SecondaryStaffRole,
-      Paired,
-    });
-    res.status(201).json(newMentor);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal Server Error" });
+app.post(
+  `${api}/mentors`,
+  passport.authenticate("jwt", { session: false }),
+  async (req, res) => {
+    try {
+      const {
+        FirstName,
+        LastName,
+        EmailAddress,
+        NonSchoolEmailAddress,
+        Phone,
+        ActivityDays,
+        PrimaryStaffRole,
+        SecondaryStaffRole,
+        Paired,
+      } = req.body;
+      const newMentor = await Mentor.create({
+        FirstName,
+        LastName,
+        EmailAddress,
+        NonSchoolEmailAddress,
+        Phone,
+        ActivityDays,
+        PrimaryStaffRole,
+        SecondaryStaffRole,
+        Paired,
+      });
+      res.status(201).json(newMentor);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
   }
-});
+);
 
 app.post(`${api}/buddies`, async (req, res) => {
   try {
