@@ -14,12 +14,6 @@ Buddy.init(Buddy.fields, {
   modelName: "Buddy",
 });
 
-// connects a Mentor and Buddy
-// Buddy holds the foreign key
-// TODO: how does linking them work?
-Mentor.belongsTo(Buddy, { as: "paired_with", unique: true });
-Buddy.hasOne(Mentor, { as: "paired_with", unique: true });
-
 module.exports = {
   sequelize,
   Sequelize,
