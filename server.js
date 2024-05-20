@@ -1,15 +1,13 @@
 const express = require("express");
-const { sequelize, Op } = require("./db/connection");
+const { sequelize, transaction } = require("./db/connection");
 const { Mentor, Buddy } = require("./models/models");
 const cors = require("cors");
-const fs = require("fs");
-const csvParser = require("csv-parser");
-const multer = require("multer");
+require("dotenv").config();
+
 const passport = require("passport");
 require("./config/passport")(passport); // pass passport as argument to passport config
-const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-require("dotenv").config();
+const jwt = require("jsonwebtoken");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -21,7 +19,6 @@ const secretKey = process.env.SECRET_KEY;
 
 app.use(cors());
 
-// sync the Sequelize models with the database
 sequelize
   .sync()
   .then(() => {
@@ -31,58 +28,46 @@ sequelize
     console.error("Error syncing database:", error);
   });
 
-// middleware to parse JSON requests
 app.use(express.json());
 
 // initialize passport
 app.use(passport.initialize());
 
-// middleware to upload files
-const upload = multer({ dest: "uploads/" }); // files will be saved in 'uploads'
-
-// routes
 app.post(`${api}/signup`, async (req, res) => {
-  const { username, password, EmailAddress } = req.body;
+  let { username, password, FirstName, LastName, EmailAddress } = req.body;
 
-  let mentor = await Mentor.findOne({ where: { EmailAddress } });
-
-  if (!mentor) {
-    return res.status(404).send("Mentor not found");
-  }
-
-  // hash the password
-  // automatically generates a salt and stores it in the hash
+  // hash password for security
   const hashedPassword = await bcrypt.hash(
     password,
     parseInt(process.env.SALT_ROUNDS)
   );
 
-  mentor.username = username;
-  mentor.password = hashedPassword;
+  password = hashedPassword;
 
-  // update mentor model
-  await mentor.save();
-
-  // mentor = await mentor.update(
-  //   { username, password },
-  //   { where: { EmailAddress } }
-  // );
-
-  // if (!mentor) {
-  //   return res.status(404).send("Mentor not updated");
-  // }
+  // create mentor
+  let newMentor;
+  await sequelize.transaction(async (t) => {
+    newMentor = await Mentor.create(
+      {
+        username,
+        password,
+        FirstName,
+        LastName,
+        EmailAddress,
+      },
+      { transaction, t }
+    );
+  });
 
   const payload = {
-    id: mentor.EmailAddress,
-    username: mentor.username,
+    id: newMentor.EmailAddress,
+    username: newMentor.username,
   };
 
-  // sign token that expires in 24 hours
   const token = jwt.sign(payload, secretKey, {
     expiresIn: process.env.EXPIRES_IN,
   });
-
-  res.send(token);
+  res.status(201).json(token);
 });
 
 app.post(`${api}/login`, async (req, res) => {
@@ -111,225 +96,323 @@ app.post(`${api}/login`, async (req, res) => {
   res.send(token);
 });
 
-app.get(
-  `${api}/home`,
-  passport.authenticate("jwt", { session: false }),
-  (req, res) => {
-    res.send(req.mentor);
-  }
-);
-
 app.post(
-  `${api}/mentors/upload`,
-  // passport.authenticate("jwt", { session: false }),
-  upload.single("file"),
-  async (req, res) => {
-    try {
-      const results = [];
-      fs.createReadStream(req.file.path)
-        .pipe(csvParser())
-        .on("data", (data) => results.push(data))
-        .on("end", async () => {
-          for (let row of results) {
-            await Mentor.create({
-              FirstName: row.FirstName,
-              LastName: row.LastName,
-              EmailAddress: row.EmailAddress,
-              NonSchoolEmailAddress: row.NonSchoolEmailAddress,
-              Phone: row.Phone,
-              ActivityDays: row.ActivityDays,
-              PrimaryStaffRole: row.PrimaryStaffRole,
-              SecondaryStaffRole: row.SecondaryStaffRole,
-              Paired: row.Paired,
-            });
-          }
-          res.status(201).json({ message: "Mentors created successfully" });
-        });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  }
-);
-
-app.get(
-  `${api}/mentors`,
+  `${api}/pairs`,
   passport.authenticate("jwt", { session: false }),
   async (req, res) => {
     try {
-      // authenticate mentor's role
-      const currentUserID = req.user.id;
-      console.log(currentUserID);
+      const { school, grade } = req.body;
+      const mentors = await Mentor.findAll();
+      // only get buddies that match the request
+      let buddies;
 
-      const currentUser = await Mentor.findOne({
-        where: { id: currentUserID },
-      });
-
-      if (
-        currentUser.PrimaryStaffRole === "VP of Programming" ||
-        currentUser.SecondaryStaffRole === "VP of Programming"
-      ) {
-        const mentors = await Mentor.findAll({
-          where: { ActivityDays: { [Op.like]: "%Tuesday%" } },
+      if (!grade && !school) {
+        buddies = await Buddy.findAll();
+      } else if (!grade) {
+        buddies = await Buddy.findAll({
+          where: {
+            School: school,
+          },
         });
-
-        res.json(mentors);
+      } else if (!school) {
+        buddies = await Buddy.findAll({
+          where: {
+            GradeLevel: grade,
+          },
+        });
       } else {
-        res.json(currentUser);
+        buddies = await Buddy.findAll({
+          where: {
+            School: school,
+            GradeLevel: grade,
+          },
+        });
       }
 
-      // const mentors = await Mentor.findAll();
-      // res.json(mentors);
-    } catch (error) {
-      console.error(error);
+      let list = [];
+
+      // pull out mentors that have the buddies found
+      for (let mentor of mentors) {
+        // only check mentors that are paired
+        if (mentor.PairedWith) {
+          const [firstName, lastName] = mentor.PairedWith.split(" ");
+          const buddy = buddies.find(
+            (buddy) =>
+              buddy.FirstName === firstName && buddy.LastName == lastName
+          );
+
+          if (buddy) {
+            list.push(mentor);
+          }
+        }
+      }
+
+      res.json(list);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+);
+
+app.get(
+  `${api}/mentors`,
+  passport.authenticate("jwt", { session: false }),
+  async (req, res) => {
+    try {
+      const mentors = await Mentor.findAll();
+
+      res.json(mentors);
+    } catch (e) {
+      console.error(e);
       res.status(500).json({ error: "Internal Server Error" });
     }
   }
 );
 
-app.get(`${api}/buddies`, async (req, res) => {
+app.get(
+  `${api}/buddies`,
+  passport.authenticate("jwt", { session: false }),
+  async (req, res) => {
+    try {
+      const buddies = await Buddy.findAll();
+
+      res.json(buddies);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
+app.get(`${api}/notpairedbuddies`, async (req, res) => {
   try {
     const buddies = await Buddy.findAll();
-    res.json(buddies);
-  } catch (error) {
-    console.error(error);
+    const mentors = await Mentor.findAll();
+
+    // list of buddies that are paired
+    const pairedBuddies = mentors
+      .filter((mentor) => mentor.PairedWith !== null)
+      .map((mentor) => mentor.PairedWith);
+
+    // split paired buddies' names into first and last
+    const pairedBuddiesNames = pairedBuddies.map((buddy) => {
+      const [firstName, lastName] = buddy.split(" ");
+      return `${firstName} ${lastName}`;
+    });
+
+    // create list of buddies that are paired
+    const notPairedBuddies = buddies.filter((buddy) => {
+      const buddyFullName = `${buddy.FirstName} ${buddy.LastName}`;
+      return !pairedBuddiesNames.includes(buddyFullName);
+    });
+
+    res.json(notPairedBuddies);
+  } catch (e) {
+    console.error(e);
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
 app.post(
-  `${api}/mentors`,
+  `${api}/buddies`,
   passport.authenticate("jwt", { session: false }),
   async (req, res) => {
     try {
-      const {
-        FirstName,
-        LastName,
-        EmailAddress,
-        NonSchoolEmailAddress,
-        Phone,
-        ActivityDays,
-        PrimaryStaffRole,
-        SecondaryStaffRole,
-        Paired,
-      } = req.body;
-      const newMentor = await Mentor.create({
-        FirstName,
-        LastName,
-        EmailAddress,
-        NonSchoolEmailAddress,
-        Phone,
-        ActivityDays,
-        PrimaryStaffRole,
-        SecondaryStaffRole,
-        Paired,
+      const { FirstName, LastName, School, GradeLevel } = req.body;
+      let newBuddy;
+      await sequelize.transaction(async (t) => {
+        newBuddy = await Buddy.create(
+          {
+            FirstName,
+            LastName,
+            School,
+            GradeLevel,
+          },
+          { transaction, t }
+        );
       });
-      res.status(201).json(newMentor);
-    } catch (error) {
-      console.error(error);
+      res.status(201).json(newBuddy);
+    } catch (e) {
+      console.error(e);
       res.status(500).json({ error: "Internal Server Error" });
     }
   }
 );
 
-app.post(`${api}/buddies`, async (req, res) => {
-  try {
-    const {
-      id,
-      FirstName,
-      LastName,
-      School,
-      GradeLevel,
-      Allergies,
-      MedicalConditions,
-      DietaryRestrictions,
-      CarriesInhaler,
-      CarriesEpiPen,
-      HasLearningSocialDevelopmentalEmotionalIssues,
-      IssueDetails,
-      Medications,
-      Other,
-      GuardianFirstName,
-      GuardianLastName,
-      GuardianRelationship,
-      GuardianPrimaryPhone,
-      GuardianAltPhone,
-      GuardianEmailAddress,
-      EmergencyContactFirstName,
-      EmergencyContactLastName,
-      EmergencyContactRelationship,
-      EmergencyContactPhone1,
-      SafetyNotes,
-      ApprovedForPickupFirstName,
-      ApprovedForPickupLastName,
-      ApprovedForPickupRelationship,
-      ApprovedForPickupPrimaryPhone,
-      Paired,
-      FavoriteSubject,
-      HobbiesAndInterests,
-    } = req.body;
-    const newBuddy = await Buddy.create({
-      id,
-      FirstName,
-      LastName,
-      School,
-      GradeLevel,
-      Allergies,
-      MedicalConditions,
-      DietaryRestrictions,
-      CarriesInhaler,
-      CarriesEpiPen,
-      HasLearningSocialDevelopmentalEmotionalIssues,
-      IssueDetails,
-      Medications,
-      Other,
-      GuardianFirstName,
-      GuardianLastName,
-      GuardianRelationship,
-      GuardianPrimaryPhone,
-      GuardianAltPhone,
-      GuardianEmailAddress,
-      EmergencyContactFirstName,
-      EmergencyContactLastName,
-      EmergencyContactRelationship,
-      EmergencyContactPhone1,
-      SafetyNotes,
-      ApprovedForPickupFirstName,
-      ApprovedForPickupLastName,
-      ApprovedForPickupRelationship,
-      ApprovedForPickupPrimaryPhone,
-      Paired,
-      FavoriteSubject,
-      HobbiesAndInterests,
-    });
-    res.status(201).json(newBuddy);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
+app.put(
+  `${api}/mentors/:id`,
+  passport.authenticate("jwt", { session: false }),
+  async (req, res) => {
+    try {
+      const id = req.params.id;
+      const {
+        username,
+        FirstName,
+        LastName,
+        EmailAddress,
+        StaffRole,
+        PairedWith,
+      } = req.body;
 
-app.delete(`${api}/mentors/:id`, async (req, res) => {
-  try {
-    const { id } = req.params; // extracting id from the URL parameters
-    const mentor = await Mentor.findByPk(id); // finding the mentor by primary key
+      const mentor = await sequelize.query(
+        "SELECT * FROM Mentors WHERE id = :id",
+        {
+          replacements: { id: id },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
 
-    if (mentor) {
-      await mentor.destroy(); // deleting the mentor if found
-      res.status(200).json({ message: `Mentor with id ${id} deleted.` });
-    } else {
-      res.status(404).json({ error: "Mentor Not Found" });
+      if (!mentor.length) {
+        return res.status(404).json({ error: "Mentor not found" });
+      }
+
+      await sequelize.query(
+        "UPDATE Mentors SET username = :username, FirstName = :FirstName, LastName = :LastName, EmailAddress = :EmailAddress, StaffRole = :StaffRole, PairedWith = :PairedWith WHERE id = :id",
+        {
+          replacements: {
+            id: id,
+            username: username,
+            FirstName: FirstName,
+            LastName: LastName,
+            EmailAddress: EmailAddress,
+            StaffRole: StaffRole,
+            PairedWith: PairedWith,
+          },
+        }
+      );
+
+      const updatedMentor = await sequelize.query(
+        "SELECT * FROM Mentors WHERE id = :id",
+        {
+          replacements: { id: id },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      res
+        .status(200)
+        .json({
+          message: "Mentor updated successfully!",
+          mentor: updatedMentor,
+        });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Internal Server Error" });
     }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal Server Error" });
   }
-});
+);
 
-// not needed? -- included above
-// sequelize.sync();
+app.put(
+  `${api}/buddies/:id`,
+  passport.authenticate("jwt", { session: false }),
+  async (req, res) => {
+    try {
+      const id = req.params.id;
+      const { FirstName, LastName, School, GradeLevel } = req.body;
 
-// start the server
+      const buddy = await sequelize.query(
+        "SELECT * FROM Buddies WHERE id = :id",
+        {
+          replacements: { id: id },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      if (!buddy.length) {
+        return res.status(404).json({ error: "Buddy not found" });
+      }
+
+      await sequelize.query(
+        "UPDATE Buddies SET FirstName = :FirstName, LastName = :LastName, School = :School, GradeLevel = :GradeLevel WHERE id = :id",
+        {
+          replacements: {
+            id: id,
+            FirstName: FirstName,
+            LastName: LastName,
+            School: School,
+            GradeLevel: GradeLevel,
+          },
+        }
+      );
+
+      const updatedBuddy = await sequelize.query(
+        "SELECT * FROM Buddies WHERE id = :id",
+        {
+          replacements: { id: id },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      res
+        .status(200)
+        .json({ message: "Buddy updated successfully!", buddy: updatedBuddy });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
+app.delete(
+  `${api}/mentors/:id`,
+  passport.authenticate("jwt", { session: false }),
+  async (req, res) => {
+    try {
+      const id = req.params.id;
+      const mentor = await sequelize.query(
+        "SELECT * FROM Mentors WHERE id = :id",
+        {
+          replacements: { id: id },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      if (!mentor.length) {
+        return res.status(404).json({ error: "Mentor not found" });
+      }
+
+      await sequelize.query("DELETE FROM Mentors WHERE id = :id", {
+        replacements: { id: id },
+      });
+
+      res.status(200).json({ message: "Mentor deleted successfully" });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
+app.delete(
+  `${api}/buddies/:id`,
+  passport.authenticate("jwt", { session: false }),
+  async (req, res) => {
+    try {
+      const id = req.params.id;
+      const buddy = await sequelize.query(
+        "SELECT * FROM Buddies WHERE id = :id",
+        {
+          replacements: { id: id },
+          type: sequelize.QueryTypes.SELECT,
+        }
+      );
+
+      if (!buddy.length) {
+        return res.status(404).json({ error: "Buddy not found" });
+      }
+
+      await sequelize.query("DELETE FROM Buddies WHERE id = :id", {
+        replacements: { id: id },
+      });
+
+      res.status(200).json({ message: "Buddy deleted successfully" });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+);
+
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server started on port ${PORT}`);
 });
