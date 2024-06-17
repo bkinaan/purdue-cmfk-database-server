@@ -191,8 +191,8 @@ dist
 # SvelteKit build / generate output
 .svelte-kit
 
-# Ignore database
-/database.sqlite
+# # Ignore database
+# /database.sqlite
 
-# End of https://www.toptal.com/developers/gitignore/api/macos,node,dotenv,git
-database.sqlite
+# # End of https://www.toptal.com/developers/gitignore/api/macos,node,dotenv,git
+# database.sqlite

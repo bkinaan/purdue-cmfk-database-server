@@ -21,3 +21,7 @@ Passwords are hashed before being stored. Additionally, when sending mentor info
 ### Transactions
 
 All create functions use transactions and a CLS namespace to ensure they are completed properly.
+
+## Sample Database
+
+In the example folder is a sample database. Move the `database.sqlite` file out of the example folder to the `server` folder for a demo.
