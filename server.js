@@ -19,6 +19,7 @@ const secretKey = process.env.SECRET_KEY;
 
 app.use(cors());
 
+// initialize sequelize
 sequelize
   .sync()
   .then(() => {
@@ -28,11 +29,13 @@ sequelize
     console.error("Error syncing database:", error);
   });
 
+// initialize express middleware for parsing json
 app.use(express.json());
 
 // initialize passport
 app.use(passport.initialize());
 
+// mentor sign up
 app.post(`${api}/signup`, async (req, res) => {
   let { username, password, FirstName, LastName, EmailAddress } = req.body;
 
@@ -70,6 +73,7 @@ app.post(`${api}/signup`, async (req, res) => {
   res.status(201).json(token);
 });
 
+// mentor login
 app.post(`${api}/login`, async (req, res) => {
   const { username, password } = req.body;
 
@@ -96,6 +100,7 @@ app.post(`${api}/login`, async (req, res) => {
   res.send(token);
 });
 
+// pairs report (all mentors and buddies that are linked) using optional filters
 app.post(
   `${api}/pairs`,
   passport.authenticate("jwt", { session: false }),
@@ -154,6 +159,7 @@ app.post(
   }
 );
 
+// retrieve all mentors
 app.get(
   `${api}/mentors`,
   passport.authenticate("jwt", { session: false }),
@@ -169,6 +175,7 @@ app.get(
   }
 );
 
+// retrieve all buddies
 app.get(
   `${api}/buddies`,
   passport.authenticate("jwt", { session: false }),
@@ -184,6 +191,7 @@ app.get(
   }
 );
 
+// retrieve a list of buddies that are not paired
 app.get(`${api}/notpairedbuddies`, async (req, res) => {
   try {
     const buddies = await Buddy.findAll();
@@ -213,6 +221,7 @@ app.get(`${api}/notpairedbuddies`, async (req, res) => {
   }
 });
 
+// add a new buddy
 app.post(
   `${api}/buddies`,
   passport.authenticate("jwt", { session: false }),
@@ -239,6 +248,7 @@ app.post(
   }
 );
 
+// edit a mentor
 app.put(
   `${api}/mentors/:id`,
   passport.authenticate("jwt", { session: false }),
@@ -289,12 +299,10 @@ app.put(
         }
       );
 
-      res
-        .status(200)
-        .json({
-          message: "Mentor updated successfully!",
-          mentor: updatedMentor,
-        });
+      res.status(200).json({
+        message: "Mentor updated successfully!",
+        mentor: updatedMentor,
+      });
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: "Internal Server Error" });
@@ -302,6 +310,7 @@ app.put(
   }
 );
 
+// edit a buddy
 app.put(
   `${api}/buddies/:id`,
   passport.authenticate("jwt", { session: false }),
@@ -353,6 +362,7 @@ app.put(
   }
 );
 
+// delete a mentor
 app.delete(
   `${api}/mentors/:id`,
   passport.authenticate("jwt", { session: false }),
@@ -383,6 +393,7 @@ app.delete(
   }
 );
 
+// delete a buddy
 app.delete(
   `${api}/buddies/:id`,
   passport.authenticate("jwt", { session: false }),
@@ -413,6 +424,7 @@ app.delete(
   }
 );
 
+// initialize server on PORT
 app.listen(PORT, () => {
   console.log(`Server started on port ${PORT}`);
 });
